@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Hilux City Mountain - Infinite</title>
+    <style>
+        * { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; outline: none; }
+        body { margin: 0; overflow: hidden; background: #87CEEB; font-family: 'Arial', sans-serif; }
+        
+        #ui { position: absolute; top: 25px; left: 25px; color: white; text-shadow: 2px 2px 10px #000; pointer-events: none; z-index: 10; }
+        .controls { position: absolute; bottom: 35px; width: 100%; display: flex; justify-content: space-between; padding: 0 35px; box-sizing: border-box; z-index: 10; }
+        
+        .btn { 
+            width: 75px; height: 75px; background: rgba(0,0,0,0.5); border: 2px solid rgba(255,255,255,0.3); 
+            border-radius: 50%; display: flex; align-items: center; justify-content: center; 
+            color: white; font-size: 24px; backdrop-filter: blur(10px); pointer-events: auto;
+        }
+        .btn:active { background: rgba(255,255,255,0.3); transform: scale(0.9); }
+        
+        .pedal { height: 110px; width: 90px; border-radius: 18px; font-size: 16px; font-weight: bold; }
+        .gas { background: rgba(0, 255, 120, 0.3); border-color: #0f0; }
+        .brake { background: rgba(255, 50, 50, 0.3); border-color: #f00; }
+        
+        .gear-btn { position: absolute; top: 20px; right: 20px; background: #ff4500; width: 100px; height: 50px; border-radius: 12px; font-size: 14px; color: white; border: none; font-weight: bold; cursor: pointer; }
+        #speed-num { font-size: 48px; font-weight: 900; color: #00ffcc; }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <div id="gear-txt" style="color:yellow; font-weight: bold;">MODE: DRIVE (D)</div>
+        <div id="speed-num">0 <small style="font-size:16px; color: white;">KM/H</small></div>
+    </div>
+
+    <button class="gear-btn" id="toggleGear">GEAR D/N</button>
+
+    <div class="controls">
+        <div style="display: flex; gap: 20px;">
+            <div class="btn" id="left">◀</div>
+            <div class="btn" id="right">▶</div>
+        </div>
+        <div style="display: flex; gap: 20px;">
+            <div class="btn pedal brake" id="brake">STOP</div>
+            <div class="btn pedal gas" id="gas">GO</div>
+        </div>
+    </div>
+
+    <script type="importmap">
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB);
+        scene.fog = new THREE.Fog(0x87CEEB, 100, 700);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.5, 2000);
+
+        const sun = new THREE.DirectionalLight(0xffffff, 2.5);
+        sun.position.set(50, 150, 50);
+        sun.castShadow = true;
+        scene.add(sun);
+        scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+
+        // --- HILUX MODEL ---
+        const hilux = new THREE.Group();
+        const paint = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.8, roughness: 0.1 });
+        const body = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.8, 5.2), paint);
+        body.position.y = 0.9; body.castShadow = true;
+        hilux.add(body);
+        const cab = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.9, 2.4), paint);
+        cab.position.set(0, 1.7, 0.5); hilux.add(cab);
+        const ex = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.5), new THREE.MeshBasicMaterial({color: 0x222222}));
+        ex.rotation.x = Math.PI/2; ex.position.set(1.1, 0.5, -2.5);
+        hilux.add(ex);
+        [[-1.2, 0.68, 1.8], [1.2, 0.68, 1.8], [-1.2, 0.68, -1.8], [1.2, 0.68, -1.8]].forEach(p => {
+            const w = new THREE.Mesh(new THREE.CylinderGeometry(0.68, 0.68, 0.5, 32), new THREE.MeshStandardMaterial({color: 0x111111}));
+            w.rotation.z = Math.PI/2; w.position.set(p[0], p[1], p[2]); hilux.add(w);
+        });
+        scene.add(hilux);
+
+        // --- BUILDING GENERATOR ---
+        const createBuilding = (x, z) => {
+            const bGroup = new THREE.Group();
+            const h = 5 + Math.random() * 15;
+            const w = 4 + Math.random() * 4;
+            const color = new THREE.Color().setHSL(Math.random(), 0.2, 0.5);
+            const bGeo = new THREE.BoxGeometry(w, h, w);
+            const bMat = new THREE.MeshStandardMaterial({ color: color });
+            const b = new THREE.Mesh(bGeo, bMat);
+            b.position.y = h/2;
+            bGroup.add(b);
+            
+            // Windows
+            const winGeo = new THREE.PlaneGeometry(0.5, 0.5);
+            const winMat = new THREE.MeshBasicMaterial({color: 0xffffaa});
+            for(let j=1; j<h; j+=2) {
+                const win = new THREE.Mesh(winGeo, winMat);
+                win.position.set(w/2+0.01, j, 0);
+                win.rotation.y = Math.PI/2;
+                bGroup.add(win);
+            }
+            bGroup.position.set(x, 0, z);
+            return bGroup;
+        };
+
+        // --- INFINITE MAP SYSTEM ---
+        const groundGroup = new THREE.Group();
+        scene.add(groundGroup);
+
+        const createTile = (z) => {
+            const tile = new THREE.Group();
+            const g = new THREE.Mesh(new THREE.PlaneGeometry(1000, 200), new THREE.MeshStandardMaterial({color: 0x3d5a35}));
+            g.rotation.x = -Math.PI/2; tile.add(g);
+            const r = new THREE.Mesh(new THREE.PlaneGeometry(25, 200), new THREE.MeshStandardMaterial({color: 0x222222}));
+            r.rotation.x = -Math.PI/2; r.position.y = 0.02; tile.add(r);
+            
+            // Add Buildings & Trees
+            for(let i=0; i<10; i++){
+                const side = Math.random() > 0.5 ? 1 : -1;
+                const x = (25 + Math.random() * 50) * side;
+                if(Math.random() > 0.4) {
+                    tile.add(createBuilding(x, (Math.random()-0.5)*200));
+                } else {
+                    const p = new THREE.Mesh(new THREE.ConeGeometry(2, 6, 8), new THREE.MeshStandardMaterial({color: 0x002200}));
+                    p.position.set(x, 3, (Math.random()-0.5)*200); tile.add(p);
+                }
+            }
+            tile.position.z = z;
+            groundGroup.add(tile);
+            return tile;
+        };
+
+        let tiles = [];
+        for(let i=0; i<6; i++) tiles.push(createTile(-i * 200));
+
+        // --- CONTROLS ---
+        let lon = 180, lat = 15, targetLon = 180, targetLat = 15, isDragging = false, lastX, lastY;
+        window.onpointerdown = (e) => { if(e.target.tagName !== 'BUTTON') isDragging = true; lastX = e.clientX; lastY = e.clientY; };
+        window.onpointermove = (e) => { if(isDragging) { targetLon -= (e.clientX - lastX)*0.4; targetLat += (e.clientY - lastY)*0.4; lastX = e.clientX; lastY = e.clientY; targetLat = Math.max(0, Math.min(60, targetLat)); }};
+        window.onpointerup = () => isDragging = false;
+
+        let speed = 0, angle = 0, targetAngle = 0, isNeutral = false, vfxs = [];
+        const input = { gas: 0, steer: 0 };
+        const bind = (id, act, v) => {
+            const el = document.getElementById(id);
+            el.onpointerdown = (e) => { e.preventDefault(); input[act] = v; };
+            el.onpointerup = () => input[act] = 0;
+        };
+        bind('gas', 'gas', 1); bind('brake', 'gas', -1);
+        bind('left', 'steer', 1); bind('right', 'steer', -1);
+        document.getElementById('toggleGear').onclick = () => isNeutral = !isNeutral;
+
+        function spawnVfx(fire) {
+            const p = new THREE.Mesh(new THREE.SphereGeometry(fire?0.25:0.4), new THREE.MeshBasicMaterial({color: fire?0xff4500:0xaaaaaa, transparent:true, opacity:0.8}));
+            p.position.copy(hilux.position).add(new THREE.Vector3(1.1, 0.5, -2.6).applyQuaternion(hilux.quaternion));
+            scene.add(p); vfxs.push({mesh:p, life:1, v: new THREE.Vector3((Math.random()-0.5)*0.1, 0.2, -0.5).applyQuaternion(hilux.quaternion)});
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (isNeutral) {
+                speed *= 0.92;
+                if (input.gas > 0) { spawnVfx(true); spawnVfx(false); }
+                document.getElementById('gear-txt').innerText = "MODE: NEUTRAL (N)";
+                document.getElementById('gear-txt').style.color = "red";
+            } else {
+                if (input.gas > 0) { speed += 0.02; if(Math.random()>0.5) spawnVfx(false); }
+                else if (input.gas < 0) speed -= 0.04;
+                else speed *= 0.98;
+                speed = Math.max(-0.5, Math.min(speed, 4.0));
+                document.getElementById('gear-txt').innerText = "MODE: DRIVE (D)";
+                document.getElementById('gear-txt').style.color = "yellow";
+            }
+
+            // Stable Steering (0.025 instead of 0.04)
+            targetAngle += input.steer * 0.025; 
+            angle = THREE.MathUtils.lerp(angle, targetAngle, 0.1);
+            hilux.rotation.y = angle;
+            hilux.rotation.z = THREE.MathUtils.lerp(hilux.rotation.z, -input.steer * 0.08, 0.05);
+            hilux.translateZ(speed);
+
+            // Infinite Map Update
+            tiles.forEach(t => {
+                if(hilux.position.z < t.position.z - 400) t.position.z -= 1200;
+                if(hilux.position.z > t.position.z + 400) t.position.z += 1200;
+            });
+
+            // Camera LERP
+            lon = THREE.MathUtils.lerp(lon, targetLon, 0.1);
+            lat = THREE.MathUtils.lerp(lat, targetLat, 0.1);
+            if(!isDragging && Math.abs(speed) > 0.1) targetLon = THREE.MathUtils.lerp(targetLon, 180, 0.03);
+
+            const phi = THREE.MathUtils.degToRad(90 - lat);
+            const theta = THREE.MathUtils.degToRad(lon + 90);
+            const camPos = new THREE.Vector3(22 * Math.sin(phi) * Math.cos(theta), 22 * Math.cos(phi), 22 * Math.sin(phi) * Math.sin(theta)).applyQuaternion(hilux.quaternion);
+            camera.position.lerp(hilux.position.clone().add(camPos), 0.1);
+            camera.lookAt(hilux.position.x, hilux.position.y + 1, hilux.position.z);
+
+            vfxs.forEach((v, i) => {
+                v.life -= 0.05; v.mesh.material.opacity = v.life; v.mesh.position.add(v.v);
+                if(v.life <= 0) { scene.remove(v.mesh); vfxs.splice(i, 1); }
+            });
+
+            document.getElementById('speed-num').innerHTML = Math.round(Math.abs(speed * 85)) + ' <small style="font-size:16px; color: white;">KM/H</small>';
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+</html>
